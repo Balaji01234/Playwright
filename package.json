@@ -1,0 +1,29 @@
+{
+  "name": "snaptrudeplaywright",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "lint-staged": {
+    "*.ts": "prettier --write"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "playwright": "ln -sf ./test-orig node_modules/@playwright/test && npx playwright",
+    "install-strude-extensions": "ts-node sTrudeExtensions.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.42.1",
+    "@types/node": "^20.7.0",
+    "allure-commandline": "^2.24.1",
+    "allure-playwright": "^2.9.2",
+    "dotenv": "^16.4.1",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.2.5",
+    "resurrect-js": "^1.0.1",
+    "ts-node": "^10.9.2"
+  }
+}

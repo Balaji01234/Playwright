@@ -1,0 +1,9 @@
+# Ignore all files and folders
+/*
+
+# Unignore the src folder
+!/src
+
+# Ignore all html and json files
+*.html
+*.json

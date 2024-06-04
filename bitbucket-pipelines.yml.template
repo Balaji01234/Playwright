@@ -1,0 +1,96 @@
+image: mcr.microsoft.com/playwright:v1.44.0-jammy
+
+definitions:
+  caches:
+    node: node_modules
+    playwright: ~/.cache/ms-playwright
+    pip: ~/.cache/pip
+
+  steps:
+    - step: &generate-test-report
+        name: Generate test report
+        script:
+          - curl -s -X POST -d @runners.json $STOP_RUNNERS
+          - runLogs=$(ls | grep run_logs) && [ -n "$runLogs" ] || exit 1
+          - apt-get update && echo && apt-get install -y python3-pip
+          - pip3 install --user tabulate==0.8.10
+          - python3 combine_artifacts.py
+          - echo "export PIPELINE_RESULT=$(cat pipeline_result.txt)" > setenv.sh
+          - source setenv.sh
+          - echo "PIPELINE_RESULT=${PIPELINE_RESULT}"
+          - cat "read-me.txt" || true
+          - if [ "$PIPELINE_RESULT" == "failed" ]; then exit 1; fi
+        artifacts:
+          - 'combined_artifacts/*'
+          - 'read-me.txt'
+          - 'failedTests.txt'
+
+pipelines:
+  pull-requests:
+    "**":
+      - step:
+          name: Setup
+          caches:
+            - node
+            - playwright
+          script:
+            - specFiles=$(git diff --name-only origin/master | grep spec.ts) && [ -n "$specFiles" ] || exit 1
+            - curl -s -X POST $START_PR_RUNNERS | tee runners.json
+            - npm ci
+            - npx playwright install chromium
+            - npx playwright test setup | tee setup_run_logs_dirty.txt;
+            - sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' setup_run_logs_dirty.txt > setup_run_logs.txt
+            - if grep -q " *[0-9]* *failed" setup_run_logs_dirty.txt; then curl -s -X POST -d @runners.json $STOP_RUNNERS; exit 1; fi
+            - while true; do response=$(curl -s -X POST -d @runners.json $RUNNER_STATUS); echo $response; onlineRunners=$(echo $response | grep ":0}$") && [ -n $onlineRunners ] || exit 0; sleep 5; done
+          artifacts:
+            - setup_run_logs.txt
+            - playwright/**
+            - runners.json
+
+      - step:
+          runs-on:
+            - self.hosted
+            - linux.shell
+            - gpu
+            - pr
+          name: Run Tests
+          caches:
+            - node
+            - playwright
+          script:
+            - specFiles=$(git diff --name-only origin/master | grep spec.ts) && [ -n "$specFiles" ] || exit 1
+            - npm ci
+            - npx playwright install chromium
+            - npx playwright test $specFiles | tee test_run_logs_dirty.txt;
+            - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" test_run_logs_dirty.txt > test_run_logs.txt
+          artifacts:
+            - allure-results/*
+            - test_run_logs.txt
+            - runners.json
+
+      - step: *generate-test-report
+
+  custom:
+    full-test-suite:
+      - step:
+          name: Setup
+          caches:
+            - node
+            - playwright
+          script:
+            - curl -s -X POST $START_SHARD_RUNNERS | tee runners.json
+            - npm ci
+            - npx playwright install chromium
+            - npx playwright test setup | tee setup_run_logs_dirty.txt;
+            - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" setup_run_logs_dirty.txt > setup_run_logs.txt
+            - if grep -q " *[0-9]* *failed" setup_run_logs_dirty.txt; then curl -s -X POST -d @runners.json $STOP_RUNNERS; exit 1; fi
+            - while true; do response=$(curl -s -X POST -d @runners.json $RUNNER_STATUS); echo $response; onlineRunners=$(echo $response | grep ":0}$") && [ -n $onlineRunners ] || exit 0; sleep 5; done
+          artifacts:
+            - setup_run_logs.txt
+            - playwright/**
+            - runners.json
+
+      #- parallel:
+
+      - step: *generate-test-report
+

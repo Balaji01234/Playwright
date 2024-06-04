@@ -1,0 +1,665 @@
+image: mcr.microsoft.com/playwright:v1.44.0-jammy
+
+definitions:
+  caches:
+    node: node_modules
+    playwright: ~/.cache/ms-playwright
+    pip: ~/.cache/pip
+
+  steps:
+    - step: &generate-test-report
+        name: Generate test report
+        script:
+          - curl -s -X POST -d @runners.json $STOP_RUNNERS
+          - runLogs=$(ls | grep run_logs) && [ -n "$runLogs" ] || exit 1
+          - apt-get update && echo && apt-get install -y python3-pip
+          - pip3 install --user tabulate==0.8.10
+          - python3 combine_artifacts.py
+          - echo "export PIPELINE_RESULT=$(cat pipeline_result.txt)" > setenv.sh
+          - source setenv.sh
+          - echo "PIPELINE_RESULT=${PIPELINE_RESULT}"
+          - cat "read-me.txt" || true
+          - if [ "$PIPELINE_RESULT" == "failed" ]; then exit 1; fi
+        artifacts:
+          - 'combined_artifacts/*'
+          - 'read-me.txt'
+          - 'failedTests.txt'
+
+pipelines:
+  pull-requests:
+    "**":
+      - step:
+          name: Setup
+          caches:
+            - node
+            - playwright
+          script:
+            - specFiles=$(git diff --name-only origin/master | grep spec.ts) && [ -n "$specFiles" ] || exit 1
+            - curl -s -X POST $START_PR_RUNNERS | tee runners.json
+            - npm ci
+            - npx playwright install chromium
+            - npx playwright test setup | tee setup_run_logs_dirty.txt;
+            - sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' setup_run_logs_dirty.txt > setup_run_logs.txt
+            - if grep -q " *[0-9]* *failed" setup_run_logs_dirty.txt; then curl -s -X POST -d @runners.json $STOP_RUNNERS; exit 1; fi
+            - while true; do response=$(curl -s -X POST -d @runners.json $RUNNER_STATUS); echo $response; onlineRunners=$(echo $response | grep ":0}$") && [ -n $onlineRunners ] || exit 0; sleep 5; done
+          artifacts:
+            - setup_run_logs.txt
+            - playwright/**
+            - runners.json
+
+      - step:
+          runs-on:
+            - self.hosted
+            - linux.shell
+            - gpu
+            - pr
+          name: Run Tests
+          caches:
+            - node
+            - playwright
+          script:
+            - specFiles=$(git diff --name-only origin/master | grep spec.ts) && [ -n "$specFiles" ] || exit 1
+            - npm ci
+            - npx playwright install chromium
+            - npx playwright test $specFiles | tee test_run_logs_dirty.txt;
+            - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" test_run_logs_dirty.txt > test_run_logs.txt
+          artifacts:
+            - allure-results/*
+            - test_run_logs.txt
+            - runners.json
+
+      - step: *generate-test-report
+
+  custom:
+    full-test-suite:
+      - step:
+          name: Setup
+          caches:
+            - node
+            - playwright
+          script:
+            - curl -s -X POST $START_SHARD_RUNNERS | tee runners.json
+            - npm ci
+            - npx playwright install chromium
+            - npx playwright test setup | tee setup_run_logs_dirty.txt;
+            - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" setup_run_logs_dirty.txt > setup_run_logs.txt
+            - if grep -q " *[0-9]* *failed" setup_run_logs_dirty.txt; then curl -s -X POST -d @runners.json $STOP_RUNNERS; exit 1; fi
+            - while true; do response=$(curl -s -X POST -d @runners.json $RUNNER_STATUS); echo $response; onlineRunners=$(echo $response | grep ":0}$") && [ -n $onlineRunners ] || exit 0; sleep 5; done
+          artifacts:
+            - setup_run_logs.txt
+            - playwright/**
+            - runners.json
+
+      - parallel:
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 1/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=1/30 --grep-invert="setup" | tee 1_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 1_run_logs_dirty.txt > 1_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 1_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 2/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=2/30 --grep-invert="setup" | tee 2_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 2_run_logs_dirty.txt > 2_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 2_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 3/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=3/30 --grep-invert="setup" | tee 3_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 3_run_logs_dirty.txt > 3_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 3_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 4/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=4/30 --grep-invert="setup" | tee 4_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 4_run_logs_dirty.txt > 4_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 4_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 5/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=5/30 --grep-invert="setup" | tee 5_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 5_run_logs_dirty.txt > 5_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 5_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 6/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=6/30 --grep-invert="setup" | tee 6_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 6_run_logs_dirty.txt > 6_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 6_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 7/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=7/30 --grep-invert="setup" | tee 7_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 7_run_logs_dirty.txt > 7_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 7_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 8/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=8/30 --grep-invert="setup" | tee 8_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 8_run_logs_dirty.txt > 8_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 8_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 9/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=9/30 --grep-invert="setup" | tee 9_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 9_run_logs_dirty.txt > 9_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 9_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 10/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=10/30 --grep-invert="setup" | tee 10_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 10_run_logs_dirty.txt > 10_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 10_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 11/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=11/30 --grep-invert="setup" | tee 11_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 11_run_logs_dirty.txt > 11_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 11_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 12/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=12/30 --grep-invert="setup" | tee 12_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 12_run_logs_dirty.txt > 12_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 12_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 13/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=13/30 --grep-invert="setup" | tee 13_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 13_run_logs_dirty.txt > 13_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 13_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 14/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=14/30 --grep-invert="setup" | tee 14_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 14_run_logs_dirty.txt > 14_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 14_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 15/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=15/30 --grep-invert="setup" | tee 15_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 15_run_logs_dirty.txt > 15_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 15_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 16/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=16/30 --grep-invert="setup" | tee 16_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 16_run_logs_dirty.txt > 16_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 16_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 17/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=17/30 --grep-invert="setup" | tee 17_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 17_run_logs_dirty.txt > 17_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 17_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 18/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=18/30 --grep-invert="setup" | tee 18_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 18_run_logs_dirty.txt > 18_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 18_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 19/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=19/30 --grep-invert="setup" | tee 19_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 19_run_logs_dirty.txt > 19_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 19_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 20/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=20/30 --grep-invert="setup" | tee 20_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 20_run_logs_dirty.txt > 20_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 20_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 21/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=21/30 --grep-invert="setup" | tee 21_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 21_run_logs_dirty.txt > 21_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 21_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 22/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=22/30 --grep-invert="setup" | tee 22_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 22_run_logs_dirty.txt > 22_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 22_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 23/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=23/30 --grep-invert="setup" | tee 23_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 23_run_logs_dirty.txt > 23_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 23_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 24/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=24/30 --grep-invert="setup" | tee 24_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 24_run_logs_dirty.txt > 24_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 24_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 25/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=25/30 --grep-invert="setup" | tee 25_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 25_run_logs_dirty.txt > 25_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 25_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 26/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=26/30 --grep-invert="setup" | tee 26_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 26_run_logs_dirty.txt > 26_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 26_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 27/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=27/30 --grep-invert="setup" | tee 27_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 27_run_logs_dirty.txt > 27_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 27_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 28/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=28/30 --grep-invert="setup" | tee 28_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 28_run_logs_dirty.txt > 28_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 28_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 29/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=29/30 --grep-invert="setup" | tee 29_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 29_run_logs_dirty.txt > 29_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 29_run_logs.txt
+
+        - step:
+            runs-on:
+              - self.hosted
+              - linux.shell
+              - gpu
+              - shard
+            name: 30/30 shard
+            caches:
+              - node
+              - playwright
+            script:
+              - npm ci
+              - npx playwright install chromium
+              - npx playwright test --shard=30/30 --grep-invert="setup" | tee 30_run_logs_dirty.txt;
+              - sed "s/\x1b\[[0-9;]*[a-zA-Z]//g" 30_run_logs_dirty.txt > 30_run_logs.txt
+            artifacts:
+              - allure-results/*
+              - 30_run_logs.txt
+
+      - step: *generate-test-report
+

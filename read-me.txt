@@ -1,0 +1,14 @@
+
+*********************************************************************************************
+
+Procedure to open test results locally.
+- Download the artifact "allure-results" from the "check pipeline result" step of the CI.
+- open terminal at downloaded folder.
+- run the command "allure serve ./"
+
+# Requirements : - if Allure is not installed, run the following commands.
+                  - "npm install --save-dev allure-commandline"
+                  - "npm install --save-dev allure-playwright"
+                 - Java runtime Env is required to serve results.
+
+********************************************************************************************

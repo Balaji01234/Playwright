@@ -1,0 +1,23 @@
+# files
+.env
+.DS_Store
+*/**/.DS_Store
+*.xlsx
+*/**/*.xlsx
+codegen.config.json
+
+# folders
+node_modules/
+/playwright/.cache/
+/playwright/.auth/user.json
+/test-results/
+/trace/
+/playwright-report/
+/allure-results/
+/allure-report/
+.idea/
+playwright/
+generated/
+src/generated/
+snaptrude-extensions/
+.vscode/

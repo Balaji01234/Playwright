@@ -1,0 +1,14 @@
+Fill in the input fields as per the prescribed format below and import this csv into your,,,
+model to automatically create masses on the canvas. Play around and assemble these,,,
+rooms together to design your built form.,,,
+,,,
+The space column defines the room name and count is the number of such rooms.,,,
+Area of each room need to be added in the Area per unit column.,,,
+"Category colour can take the input of hex color code. All Spaces of the same color will be grouped together
+ when displayed after the import on the canvas.",,,
+B10 cell supports only sqm/ sqft,,,
+,,,
+Area unit,sqmm,,
+,,,
+Space,Count,Area per unit,Category colour
+Dining,3,1000000,

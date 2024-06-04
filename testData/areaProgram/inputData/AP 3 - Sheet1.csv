@@ -1,0 +1,40 @@
+Fill in the input fields as per the prescribed format below and import this csv into your,,,
+model to automatically create masses on the canvas. Play around and assemble these,,,
+rooms together to design your built form.,,,
+,,,
+The space column defines the room name and count is the number of such rooms.,,,
+Area of each room need to be added in the Area per unit column.,,,
+"Category colour can take the input of hex color code. All Spaces of the same color will be grouped together
+ when displayed after the import on the canvas.",,,
+B10 cell supports only sqm/ sqft,,,
+,,,
+Area unit,sqm,,
+,,,
+Space,Count,Area per unit,Category colour
+Reception,6,1,#b6d7a8
+Foyer,30,1,#ffe599
+Workstation,2.25,300,#9fc5e8
+Storyboarding room,60,2,#b4a7d6
+Conference room,30,2,#f9cb9c
+Meeting room,45,1,#ea9999
+Screening room,70,1,#6fa8dc
+Server room,60,1,#c27ba0
+Backup room,30,1,#f1c232
+Render room,30,1,#a64d79
+Storage,30,1,#e06666
+Rest room,25,1,#45818e
+,,3,#ffd966
+Staff room,20,6,#8fce00
+Guest room,20,6,#bcbcbc
+Rest room,30,1,#990000
+Storage,24,6,#674ea7
+,,,
+Production office,24,3,#f44336
+Green room,50,6,#fff2cc
+,,0,
+Live room ,25,1,#0b5394
+Control room,30,1,#bf9000
+Bootg,15,1,#c90076
+Equipments storage,20,2,#134f5c
+Lobby,20,1,#ce7e00
+Editing studio,60,5,#351c75
